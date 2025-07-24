@@ -12,17 +12,27 @@
 
 using namespace OIIO;
 
+
+
 class Image : public QObject {
     Q_OBJECT
+
+
+
     public:
+        struct ChannelData {
+            std::vector<float> data;
+            int width;
+            int height;
+            int channels;
+            std::vector<std::string> channel_names;
+        };
         explicit Image(const char* filename);
         ~Image();
         std::unique_ptr<ImageInput> inp;
         QList<QString> getlayers();
-        std::unique_ptr<OIIO::ImageBuf> getChannelDataForOCIO(
-            const std::string& strippedChannelName,
-            const std::string& channelSelector
-        ) const;
+        ChannelData getChannelDataForOCIO(const QString& channelBaseName, const QString& component);
+
 };
 
 #endif //IMAGE_H

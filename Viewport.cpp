@@ -17,8 +17,19 @@ Viewport::Viewport(QWidget *parent): QGraphicsView(parent) {
     this->setScene(scene);
 
     this->ocio_config = OCIO::Config::CreateFromFile("../colormanagement/aces.ocio");
-    this->iamge = new Image("../test.exr");
+    this->image = new Image("../test.psd");
     this->color_manager = new ColorManager();
+
+    auto rgba_data = image->getChannelDataForOCIO("", "R");
+    //auto red_data = image->getChannelDataForOCIO("diffuse", "r");
+    //auto x_data = image->getChannelDataForOCIO("normal", "x");
+
+    auto transformedData = this->color_manager->transform(rgba_data, "Linear Rec.709 (sRBG)", "ACEScg");
+
+    transformedData = this->color_manager->transform(rgba_data, "ACEScg", "sRGB - Display");
+
+    QGraphicsPixmapItem* item = this->createPixmapItem(transformedData);
+    scene->addItem(item);
 
     this->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(this, &QGraphicsView::customContextMenuRequested, this, &Viewport::showContextMenu);
@@ -39,7 +50,7 @@ void Viewport::showContextMenu(const QPoint &pos) {
          * View layers menu.
          */
         QMenu *viewMenu = contextMenu.addMenu("View Layer");
-        QList<QString> layers = this->iamge->getlayers();
+        QList<QString> layers = this->image->getlayers();
         for (const QString& layer : layers) {
             viewMenu->addAction(layer, this, []() {
                 qDebug() << "Layer selected";
@@ -85,5 +96,101 @@ void Viewport::showContextMenu(const QPoint &pos) {
     }
 
     contextMenu.exec(mapToGlobal(pos));
+}
+
+
+QGraphicsPixmapItem* Viewport::createPixmapItem(const Image::ChannelData& channelData) {
+
+    // Validate input data
+    if (channelData.data.empty() || channelData.width <= 0 || channelData.height <= 0) {
+        qDebug() << "Error: Invalid channel data for pixmap creation";
+        return nullptr;
+    }
+
+    // We need at least 3 channels (RGB) for display
+    if (channelData.channels < 3) {
+        qDebug() << "Error: Need at least 3 channels for display";
+        return nullptr;
+    }
+
+    // Create QImage - we'll use RGBA format for consistency
+    QImage image(channelData.width, channelData.height, QImage::Format_RGBA8888);
+
+    // Convert float data to 8-bit and populate QImage
+    for (int y = 0; y < channelData.height; ++y) {
+        for (int x = 0; x < channelData.width; ++x) {
+            int pixelIdx = y * channelData.width + x;
+            int dataIdx = pixelIdx * channelData.channels;
+
+            // Get float values (0.0 to 1.0 range)
+            float r = channelData.data[dataIdx + 0];
+            float g = channelData.data[dataIdx + 1];
+            float b = channelData.data[dataIdx + 2];
+            float a = (channelData.channels >= 4) ? channelData.data[dataIdx + 3] : 1.0f;
+
+            // Clamp values to valid range
+            r = std::max(0.0f, std::min(1.0f, r));
+            g = std::max(0.0f, std::min(1.0f, g));
+            b = std::max(0.0f, std::min(1.0f, b));
+            a = std::max(0.0f, std::min(1.0f, a));
+
+            // Convert to 8-bit values (0-255)
+            quint8 r8 = static_cast<quint8>(r * 255.0f);
+            quint8 g8 = static_cast<quint8>(g * 255.0f);
+            quint8 b8 = static_cast<quint8>(b * 255.0f);
+            quint8 a8 = static_cast<quint8>(a * 255.0f);
+
+            // Set pixel in QImage
+            QRgb pixel = qRgba(r8, g8, b8, a8);
+            image.setPixel(x, y, pixel);
+        }
+    }
+
+    // Create QPixmap from QImage
+    QPixmap pixmap = QPixmap::fromImage(image);
+
+    // Create QGraphicsPixmapItem
+    QGraphicsPixmapItem* pixmapItem = new QGraphicsPixmapItem(pixmap);
+
+    // Optional: Set some useful properties
+    pixmapItem->setTransformationMode(Qt::SmoothTransformation);
+
+    qDebug() << "Created pixmap item:" << channelData.width << "x" << channelData.height
+             << "with" << channelData.channels << "channels";
+
+    return pixmapItem;
+}
+
+// Convenience method to create and display a transformed channel
+QGraphicsPixmapItem* Viewport::displayChannel(const QString& channelBaseName,
+                                             const QString& component,
+                                             const QString& inputColorSpace,
+                                             const QString& outputColorSpace) {
+
+    // Get the channel data from the image
+    auto channelData = this->image->getChannelDataForOCIO(channelBaseName, component);
+
+    if (channelData.data.empty()) {
+        qDebug() << "No data for channel:" << channelBaseName << component;
+        return nullptr;
+    }
+
+    // Transform the color space
+    auto transformedData = this->color_manager->transform(channelData, inputColorSpace, outputColorSpace);
+
+    // Create the pixmap item
+    QGraphicsPixmapItem* pixmapItem = createPixmapItem(transformedData);
+
+    if (pixmapItem) {
+        // Add to scene (remove any existing items first if desired)
+        // this->scene()->clear(); // Uncomment if you want to replace existing content
+        this->scene()->addItem(pixmapItem);
+
+        // Center the item in the view
+        pixmapItem->setPos(-pixmapItem->boundingRect().width() / 2,
+                          -pixmapItem->boundingRect().height() / 2);
+    }
+
+    return pixmapItem;
 }
 

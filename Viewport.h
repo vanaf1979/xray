@@ -28,8 +28,13 @@ class Viewport : public QGraphicsView {
     public:
         Viewport(QWidget *parent = nullptr);
         OCIO::ConstConfigRcPtr ocio_config;
-        Image* iamge;
+        Image* image;
         ColorManager* color_manager;
+        QGraphicsPixmapItem* createPixmapItem(const Image::ChannelData& channelData);
+        QGraphicsPixmapItem* displayChannel(const QString& channelBaseName,
+                                             const QString& component,
+                                             const QString& inputColorSpace,
+                                             const QString& outputColorSpace);
 
     protected slots:
         void showContextMenu(const QPoint &pos);
