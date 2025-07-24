@@ -4,8 +4,12 @@
 #include <QObject>
 #include <QDebug>
 #include <QList>
-#include <QString>
+#include <vector>
+#include <memory>
+#include <OpenImageIO/imagebuf.h>
+// #include <OpenImageIO/imagespec.h>
 #include <OpenImageIO/imageio.h>
+
 using namespace OIIO;
 
 class Image : public QObject {
@@ -15,6 +19,10 @@ class Image : public QObject {
         ~Image();
         std::unique_ptr<ImageInput> inp;
         QList<QString> getlayers();
+        std::unique_ptr<OIIO::ImageBuf> getChannelDataForOCIO(
+            const std::string& strippedChannelName,
+            const std::string& channelSelector
+        ) const;
 };
 
 #endif //IMAGE_H
