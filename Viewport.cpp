@@ -16,20 +16,31 @@ Viewport::Viewport(QWidget *parent): QGraphicsView(parent) {
     scene->setSceneRect(-5000, -5000, 10000, 10000);
     this->setScene(scene);
 
-    this->ocio_config = OCIO::Config::CreateFromFile("../colormanagement/aces.ocio");
-    this->image = new Image("../test.exr");
+    // Create the ocio color manager.
     this->color_manager = new ColorManager();
 
-    auto rgba_data = image->getChannelDataForOCIO("ViewLayer.Combined", "all");
-    //auto red_data = image->getChannelDataForOCIO("diffuse", "r");
-    //auto x_data = image->getChannelDataForOCIO("normal", "x");
+    // Load in a new image.
+    this->image = new Image("../test.exr");
 
+    // Get the selected channel data.
+    auto rgba_data = image->getChannelDataForOCIO("ViewLayer.Combined", "all");
+
+    // Convert from input color space to ACEScg
     auto transformedData = this->color_manager->transform(rgba_data, "Linear Rec.709 (sRGB)", "ACEScg");
 
-    transformedData = this->color_manager->transform(rgba_data, "ACEScg", "sRGB - Display");
+    // Add a gamma correction.
+    transformedData = image->applyGammaCorrection(transformedData, 1.0);
 
-    QGraphicsPixmapItem* item = this->createPixmapItem(transformedData);
+    // Convert from ACEScg to the output color space
+    transformedData = this->color_manager->transform(transformedData, "ACEScg", "sRGB - Display");
+
+    // Turn the image data into a QGraphicsPixmapItem
+    QGraphicsPixmapItem *item = this->createPixmapItem(transformedData);
+
+    // Set the item position based on its width and height.
     item->setPos(item->boundingRect().width() / -2, item->boundingRect().height() / -2);
+
+    // Add the item to the scene.
     scene->addItem(item);
 
     this->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -52,7 +63,7 @@ void Viewport::showContextMenu(const QPoint &pos) {
          */
         QMenu *viewMenu = contextMenu.addMenu("View Layer");
         QList<QString> layers = this->image->getlayers();
-        for (const QString& layer : layers) {
+        for (const QString &layer: layers) {
             viewMenu->addAction(layer, this, []() {
                 qDebug() << "Layer selected";
             });
@@ -60,18 +71,18 @@ void Viewport::showContextMenu(const QPoint &pos) {
 
         contextMenu.addSeparator();
 
-        QMap<QString, QList<QString>> color_transforms = this->color_manager->getTransforms();
+        QMap<QString, QList<QString> > color_transforms = this->color_manager->getTransforms();
 
         /*
          * Input colorspace menu.
          */
         QMenu *inputMenu = contextMenu.addMenu("Input Colorspace");
 
-        for (QMap<QString, QList<QString>>::const_iterator it = color_transforms.constBegin(); it != color_transforms.constEnd(); ++it)
-        {
+        for (QMap<QString, QList<QString> >::const_iterator it = color_transforms.constBegin();
+             it != color_transforms.constEnd(); ++it) {
             QMenu *subMenu = inputMenu->addMenu(it.key());
 
-            for (const QString transform : it.value()) {
+            for (const QString transform: it.value()) {
                 subMenu->addAction(transform, this, []() {
                     qDebug() << "Click";
                 });
@@ -83,25 +94,23 @@ void Viewport::showContextMenu(const QPoint &pos) {
          */
         QMenu *outputMenu = contextMenu.addMenu("Output Colorspace");
 
-        for (QMap<QString, QList<QString>>::const_iterator it = color_transforms.constBegin(); it != color_transforms.constEnd(); ++it)
-        {
+        for (QMap<QString, QList<QString> >::const_iterator it = color_transforms.constBegin();
+             it != color_transforms.constEnd(); ++it) {
             QMenu *subMenu = outputMenu->addMenu(it.key());
 
-            for (const QString transform : it.value()) {
+            for (const QString transform: it.value()) {
                 subMenu->addAction(transform, this, []() {
                     qDebug() << "Click";
                 });
             }
         }
-
     }
 
     contextMenu.exec(mapToGlobal(pos));
 }
 
 
-QGraphicsPixmapItem* Viewport::createPixmapItem(const Image::ChannelData& channelData) {
-
+QGraphicsPixmapItem *Viewport::createPixmapItem(const Image::ChannelData &channelData) {
     // Validate input data
     if (channelData.data.empty() || channelData.width <= 0 || channelData.height <= 0) {
         qDebug() << "Error: Invalid channel data for pixmap creation";
@@ -151,23 +160,19 @@ QGraphicsPixmapItem* Viewport::createPixmapItem(const Image::ChannelData& channe
     QPixmap pixmap = QPixmap::fromImage(image);
 
     // Create QGraphicsPixmapItem
-    QGraphicsPixmapItem* pixmapItem = new QGraphicsPixmapItem(pixmap);
+    QGraphicsPixmapItem *pixmapItem = new QGraphicsPixmapItem(pixmap);
 
     // Optional: Set some useful properties
     pixmapItem->setTransformationMode(Qt::SmoothTransformation);
 
     qDebug() << "Created pixmap item:" << channelData.width << "x" << channelData.height
-             << "with" << channelData.channels << "channels";
+            << "with" << channelData.channels << "channels";
 
     return pixmapItem;
 }
 
 // Convenience method to create and display a transformed channel
-QGraphicsPixmapItem* Viewport::displayChannel(const QString& channelBaseName,
-                                             const QString& component,
-                                             const QString& inputColorSpace,
-                                             const QString& outputColorSpace) {
-
+QGraphicsPixmapItem *Viewport::displayChannel(const QString &channelBaseName, const QString &component, const QString &inputColorSpace, const QString &outputColorSpace) {
     // Get the channel data from the image
     auto channelData = this->image->getChannelDataForOCIO(channelBaseName, component);
 
@@ -180,18 +185,7 @@ QGraphicsPixmapItem* Viewport::displayChannel(const QString& channelBaseName,
     auto transformedData = this->color_manager->transform(channelData, inputColorSpace, outputColorSpace);
 
     // Create the pixmap item
-    QGraphicsPixmapItem* pixmapItem = createPixmapItem(transformedData);
-
-    if (pixmapItem) {
-        // Add to scene (remove any existing items first if desired)
-        // this->scene()->clear(); // Uncomment if you want to replace existing content
-        this->scene()->addItem(pixmapItem);
-
-        // Center the item in the view
-        pixmapItem->setPos(-pixmapItem->boundingRect().width() / 2,
-                          -pixmapItem->boundingRect().height() / 2);
-    }
+    QGraphicsPixmapItem *pixmapItem = createPixmapItem(transformedData);
 
     return pixmapItem;
 }
-

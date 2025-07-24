@@ -22,9 +22,7 @@ QMap<QString, QList<QString>> ColorManager::getTransforms() {
 }
 
 
-Image::ChannelData ColorManager::transform(const Image::ChannelData& inputData,
-                                         const QString& inputColorSpace,
-                                         const QString& outputColorSpace) {
+Image::ChannelData ColorManager::transform(const Image::ChannelData& inputData, const QString& inputColorSpace, const QString& outputColorSpace) {
 
     Image::ChannelData result = inputData; // Copy input data structure
 
@@ -94,8 +92,7 @@ Image::ChannelData ColorManager::transform(const Image::ChannelData& inputData,
             return inputData; // Return original data unchanged
         }
 
-        qDebug() << "Successfully transformed" << numPixels << "pixels from"
-                 << inputColorSpace << "to" << outputColorSpace;
+        qDebug() << "Successfully transformed" << numPixels << "pixels from" << inputColorSpace << "to" << outputColorSpace;
 
     } catch (const OCIO::Exception& e) {
         qDebug() << "OCIO Error during transformation:" << e.what();

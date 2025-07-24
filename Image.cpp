@@ -85,7 +85,7 @@ Image::ChannelData Image::getChannelDataForOCIO(const QString& channelBaseName, 
         return result;
     }
 
-    // Read the entire image data - fix the read_image call
+    // Read the entire image data
     std::vector<float> image_data(spec.width * spec.height * spec.nchannels);
     if (!this->inp->read_image(0, 0, 0, spec.nchannels, TypeDesc::FLOAT, image_data.data())) {
         qDebug() << "Failed to read image data";
@@ -165,6 +165,57 @@ Image::ChannelData Image::getChannelDataForOCIO(const QString& channelBaseName, 
             }
         }
     }
+
+    return result;
+}
+
+
+Image::ChannelData Image::applyGammaCorrection(const Image::ChannelData& inputData, float gamma) {
+
+    // Create a copy of the input data
+    ChannelData result = inputData;
+
+    // Validate input
+    if (inputData.data.empty()) {
+        qDebug() << "Error: Empty input data for gamma correction";
+        return result;
+    }
+
+    if (gamma <= 0.0f) {
+        qDebug() << "Error: Gamma value must be greater than 0, got:" << gamma;
+        return result;
+    }
+
+    // Calculate the gamma correction exponent
+    float gammaExponent = 1.0f / gamma;
+
+    // Apply gamma correction to RGB channels only (preserve alpha unchanged)
+    int numPixels = inputData.width * inputData.height;
+
+    for (int i = 0; i < numPixels; ++i) {
+        int pixelBaseIdx = i * inputData.channels;
+
+        // Apply gamma to RGB channels (first 3 channels)
+        int channelsToProcess = std::min(3, inputData.channels);
+
+        for (int c = 0; c < channelsToProcess; ++c) {
+            float value = result.data[pixelBaseIdx + c];
+
+            // Only apply gamma to positive values to avoid NaN/inf
+            if (value > 0.0f) {
+                result.data[pixelBaseIdx + c] = std::pow(value, gammaExponent);
+            } else if (value < 0.0f) {
+                // For negative values, apply gamma to absolute value and restore sign
+                result.data[pixelBaseIdx + c] = -std::pow(-value, gammaExponent);
+            }
+            // value == 0.0f remains unchanged
+        }
+
+        // Alpha channel (if present) is left unchanged
+        // Channels beyond RGBA are also left unchanged
+    }
+
+    qDebug() << "Applied gamma correction with factor" << gamma << "to" << numPixels << "pixels";
 
     return result;
 }

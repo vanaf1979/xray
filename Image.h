@@ -32,6 +32,7 @@ class Image : public QObject {
         std::unique_ptr<ImageInput> inp;
         QList<QString> getlayers();
         ChannelData getChannelDataForOCIO(const QString& channelBaseName, const QString& component);
+        ChannelData applyGammaCorrection(const Image::ChannelData& inputData, float gamma);
 
 };
 
