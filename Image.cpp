@@ -47,20 +47,36 @@ Image::ChannelData Image::getChannelDataForOCIO(const QString& channelBaseName, 
     std::vector<int> matching_channel_indices;
     std::vector<std::string> matching_channel_names;
 
-    for (int i = 0; i < spec.channelnames.size(); ++i) {
-        const std::string& channel_name = spec.channelnames[i];
-        QString qchannel_name = QString::fromStdString(channel_name);
+    if (channelBaseName == "default") {
+        // Handle default channels (R, G, B, A) for PNG, PSD, etc.
+        std::vector<std::string> defaultChannels = {"R", "G", "B", "A"};
 
-        // Extract base name by removing suffix after last dot
-        QString base_name = qchannel_name;
-        int pos = qchannel_name.lastIndexOf('.');
-        if (pos != -1) {
-            base_name = qchannel_name.left(pos);
+        for (const std::string& defaultChannel : defaultChannels) {
+            for (int i = 0; i < spec.channelnames.size(); ++i) {
+                if (spec.channelnames[i] == defaultChannel) {
+                    matching_channel_indices.push_back(i);
+                    matching_channel_names.push_back(spec.channelnames[i]);
+                    break; // Found this channel, move to next
+                }
+            }
         }
+    } else {
+        // Handle named channels with dot notation (diffuse.r, specular.g, etc.)
+        for (int i = 0; i < spec.channelnames.size(); ++i) {
+            const std::string& channel_name = spec.channelnames[i];
+            QString qchannel_name = QString::fromStdString(channel_name);
 
-        if (base_name == channelBaseName) {
-            matching_channel_indices.push_back(i);
-            matching_channel_names.push_back(channel_name);
+            // Extract base name by removing suffix after last dot
+            QString base_name = qchannel_name;
+            int pos = qchannel_name.lastIndexOf('.');
+            if (pos != -1) {
+                base_name = qchannel_name.left(pos);
+            }
+
+            if (base_name == channelBaseName) {
+                matching_channel_indices.push_back(i);
+                matching_channel_names.push_back(channel_name);
+            }
         }
     }
 
@@ -100,12 +116,26 @@ Image::ChannelData Image::getChannelDataForOCIO(const QString& channelBaseName, 
 
         // Find the specific component channel
         int target_channel_idx = -1;
-        std::string target_suffix = "." + component.toStdString();
 
-        for (int i = 0; i < matching_channel_indices.size(); ++i) {
-            if (matching_channel_names[i].ends_with(target_suffix)) {
-                target_channel_idx = matching_channel_indices[i];
-                break;
+        if (channelBaseName == "default") {
+            // For default channels, look for the component directly (R, G, B, A)
+            std::string target_channel = component.toUpper().toStdString();
+
+            for (int i = 0; i < matching_channel_indices.size(); ++i) {
+                if (matching_channel_names[i] == target_channel) {
+                    target_channel_idx = matching_channel_indices[i];
+                    break;
+                }
+            }
+        } else {
+            // For named channels, look for the dot notation (channelname.r, etc.)
+            std::string target_suffix = "." + component.toStdString();
+
+            for (int i = 0; i < matching_channel_indices.size(); ++i) {
+                if (matching_channel_names[i].ends_with(target_suffix)) {
+                    target_channel_idx = matching_channel_indices[i];
+                    break;
+                }
             }
         }
 

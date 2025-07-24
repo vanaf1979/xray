@@ -17,18 +17,19 @@ Viewport::Viewport(QWidget *parent): QGraphicsView(parent) {
     this->setScene(scene);
 
     this->ocio_config = OCIO::Config::CreateFromFile("../colormanagement/aces.ocio");
-    this->image = new Image("../test.psd");
+    this->image = new Image("../test.exr");
     this->color_manager = new ColorManager();
 
-    auto rgba_data = image->getChannelDataForOCIO("", "R");
+    auto rgba_data = image->getChannelDataForOCIO("ViewLayer.Combined", "all");
     //auto red_data = image->getChannelDataForOCIO("diffuse", "r");
     //auto x_data = image->getChannelDataForOCIO("normal", "x");
 
-    auto transformedData = this->color_manager->transform(rgba_data, "Linear Rec.709 (sRBG)", "ACEScg");
+    auto transformedData = this->color_manager->transform(rgba_data, "Linear Rec.709 (sRGB)", "ACEScg");
 
     transformedData = this->color_manager->transform(rgba_data, "ACEScg", "sRGB - Display");
 
     QGraphicsPixmapItem* item = this->createPixmapItem(transformedData);
+    item->setPos(item->boundingRect().width() / -2, item->boundingRect().height() / -2);
     scene->addItem(item);
 
     this->setContextMenuPolicy(Qt::CustomContextMenu);
